@@ -1,9 +1,15 @@
 import socket
 import threading
-import curses
 
 Users = {"admin": {"room": "", "status": ""}}
 Rooms = {"lobby": {"users": [], "description": "Lobby", "moderators": [], "password": "", "permanent": True}}
+
+
+def str_concatenate(list_, a, b):
+    str_ = ""
+    for i in range(a, b):
+        str_ = str_ + list_[i] + " "
+    return str_[:len(str_) - 1]
 
 
 class ClientThread(threading.Thread):
@@ -16,93 +22,102 @@ class ClientThread(threading.Thread):
 
     def run(self):
         print("Connection from : ", clientAddress)
-        self.csocket.send(bytes("Welcome to Chat App!!\n", 'utf-8'))
         msg = ""
-        username = ""
-        print(type(self.csocket))
-        while True:
-            self.csocket.send(bytes("Please enter an username\n", 'utf-8'))
-            data = self.csocket.recv(2048)
-            username = data.decode()
-            if not username.isalnum():
-                self.csocket.send(
-                    bytes("Invalid character!\n", 'utf-8'))
-                self.csocket.send(
-                    bytes("Please enter an username that only contains alphanumeric characters\n", 'utf-8'))
-            elif username in Users:
-                self.csocket.send(
-                    bytes("Username already exists!\n", 'utf-8'))
-                self.csocket.send(
-                    bytes("Please enter another username\n", 'utf-8'))
-            else:
-                Users[username] = {}
-                Users[username]["status"] = "Available"
-                Users[username]["room"] = "lobby"
-                Rooms["lobby"]["users"].append(self.csocket)
-                self.csocket.send(
-                    bytes(f"Hey there {username}!\n", 'utf-8'))
-                self.csocket.send(
-                    bytes("Type /help to see all available commands\n", 'utf-8'))
-                break
+        current_room = ""
+        username = "new_user"
 
         while True:
             data = self.csocket.recv(2048)
             msg = data.decode()
+            print(f"From client {username}: ", msg)
             msg_split = msg.split()
-            if msg == "/quit":
-                self.csocket.send(
-                    bytes("/quit", 'utf-8'))
-            elif msg == "/help":
-                continue
-            elif msg_split[0] == "/edit":
-                continue
-            elif msg_split[0] == "/profile":
-                continue
-            elif msg_split[0] == "/r":
-                continue
-            elif msg_split[0] == "/list":
-                continue
-            elif msg_split[0] == "/room":
-                new_room = msg_split[1]
-                if new_room in Rooms or Rooms[new_room]["permanent"]:
-                    if Rooms[new_room]["password"] != "":
-                        self.csocket.send(bytes(f"Please enter password of the {new_room} room!\n", 'utf-8'))
-                        data = self.csocket.recv(2048)
-                        msg = data.decode()
-                    self.csocket.send(
-                        bytes(f"Welcome to the {new_room} room!\n", 'utf-8'))
+            if username != "new_user":
+                current_room = Users[username]["room"]
+
+            if msg_split[0] == "NEW_USER":
+                if msg_split[1] in Users:
+                    print(f"Taken username {msg_split[1]}")
+                    self.csocket.send(bytes("ERROR USERNAME_TAKEN", 'UTF-8'))
                 else:
-                    continue
-            elif msg_split[0] == "/ban":
-                continue
+                    username = msg_split[1]
+                    Users[username] = {}
+                    Users[username]["status"] = "available"
+                    Users[username]["room"] = "lobby"
+                    Rooms["lobby"]["users"].append(self.csocket)
+                    print(f"New user created {username}")
+                    self.csocket.send(bytes("OK", 'UTF-8'))
 
-            elif msg_split[0] == "/password":
-                continue
+            elif msg_split[0] == "QUIT":
+                print(f"{username} has left the app")
+                self.csocket.send(bytes("QUIT", 'UTF-8'))
+                Rooms[Users[username]["room"]]["users"].remove(self.csocket)
+                Users.pop(username, None)
+                break
 
-            elif msg_split[0] == "/description":
-                continue
-            elif msg_split[0] == "/moderator":
-                continue
-            elif msg_split[0] == "/super":
-                continue
-            else:
+            elif msg_split[0] == "ROOM":
+                if msg_split[1] in Rooms:
+                    if (msg_split[2] == "PASSWORD" and msg_split[3] == Rooms[msg_split[1]]["password"]) \
+                            or Rooms[msg_split[1]]["password"] == "":
+                        Rooms[current_room]["users"].remove(self.csocket)
+                        if len(Rooms[current_room]["users"]) == 0 and not Rooms[current_room]["permanent"]:
+                            Rooms.pop(current_room, None)
+                        Rooms[msg_split[1]]["users"].append(self.csocket)
+                        Users[username]["room"] = msg_split[1]
+                        print(f"User successfully joined {msg_split[1]}")
+                        self.csocket.send(bytes("ROOM SUCCESSFUL USER " + msg_split[1], 'UTF-8'))
+
+                    elif msg_split[2] == "NO_PASSWORD" and Rooms[msg_split[1]]["password"] != "":
+                        print(f"No password entered for {msg_split[1]}")
+                        self.csocket.send(bytes("ROOM UNSUCCESSFUL PASSWORD_REQUIRED " + msg_split[1], 'UTF-8'))
+
+                    else:
+                        print(f"Incorrect password for {msg_split[1]}")
+                        self.csocket.send(bytes("ROOM UNSUCCESSFUL INCORRECT_PASSWORD " + msg_split[1], 'UTF-8'))
+
+                else:
+                    Rooms[current_room]["users"].remove(self.csocket)
+                    if len(Rooms[current_room]["users"]) == 1 and not Rooms[current_room]["permanent"]:
+                        Rooms.pop(current_room, None)
+                    Users[username]["room"] = msg_split[1]
+                    Rooms[msg_split[1]] = {}
+                    Rooms[msg_split[1]]["users"] = [self.csocket]
+                    Rooms[msg_split[1]]["password"] = ""
+                    Rooms[msg_split[1]]["description"] = ""
+                    Rooms[msg_split[1]]["moderators"] = [username]
+                    Rooms[msg_split[1]]["permanent"] = False
+                    print(f"User successfully joined {msg_split[1]} as a moderator")
+                    self.csocket.send(bytes("ROOM SUCCESSFUL MODERATOR " + msg_split[1], 'UTF-8'))
+
+            elif msg_split[0] == "LIST":
+                out_ = "LIST " + str(len(Rooms))
+                for room in Rooms:
+                    password = "PASSWORD_REQUIRED"
+                    if Rooms[room]["password"] == "":
+                        password = "NO_PASSWORD"
+                    out_ = out_ + " " + room + " " + str(len(Rooms[room]["users"])) + " " + password
+                print("List room", out_)
+                self.csocket.send(bytes(out_, 'UTF-8'))
+
+            elif msg_split[0] == "PASSWORD":
+                if username in Rooms[current_room]["moderators"]:
+                    if Rooms[current_room]["password"] == "":
+                        self.csocket.send(bytes("PASSWORD SUCCESSFUL ADDED", 'UTF-8'))
+                    else:
+                        self.csocket.send(bytes("PASSWORD SUCCESSFUL CHANGED", 'UTF-8'))
+                    Rooms[current_room]["password"] = msg_split[1]
+                else:
+                    self.csocket.send(bytes("PASSWORD UNSUCCESSFUL NOT_MODERATOR", 'UTF-8'))
+
+            elif msg_split[0] == "MSG":
                 for user in Rooms[Users[username]["room"]]["users"]:
-                    user.send(bytes("[" + username + "]: " + msg, 'utf-8'))
+                    msg_ = str_concatenate(msg_split, 1, len(msg_split))
+                    user.send(bytes("MSG " + username + " " + msg_, 'UTF-8'))
 
-                """
-                if Users[username]["room"] == "":
-                    self.csocket.send(
-                        bytes("Please join a room by using /room <room name> command!", 'utf-8'))
-                    msg = ""
-                else:
-                    self.send_message("[" + username + "]: " + msg, Users[username]["room"])"""
+        print("Active connections:", threading.active_count())
 
-            print("from client", msg)
-            print("Client at ", clientAddress, " disconnected...")
-            print("Active connections:", threading.active_count())
 
 LOCALHOST = "127.0.0.1"
-PORT = 8093
+PORT = 8247
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((LOCALHOST, PORT))

@@ -67,10 +67,8 @@ class ChatUI:
 
     def chatbuffer_add(self, msg):
         """
-
         Add a message to the chat buffer, automatically slicing it to
         fit the width of the buffer
-
         """
         self.chatbuffer.append(msg)
         self._linebuffer_add(msg)
@@ -96,10 +94,8 @@ class ChatUI:
 
     def wait_input(self, prompt=""):
         """
-
         Wait for the user to input a message and hit enter.
         Returns the message
-
         """
         self.inputbuffer = prompt
         self.redraw_chatline()
