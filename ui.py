@@ -9,7 +9,7 @@ class ChatUI:
         self.stdscr = stdscr
         self.inputbuffer = ""
         self.linebuffer = []
-        self.chatbuffer = []
+        self.linebuffer_color = []
 
         # Curses, why must you confuse me with your height, width, y, x
         chatbuffer_hwyx = (curses.LINES - 2, 0,
@@ -17,19 +17,6 @@ class ChatUI:
         chatline_yx = (curses.LINES - 1, 0)
         self.win_chatline = stdscr.derwin(*chatline_yx)
         self.win_chatbuffer = stdscr.derwin(*chatbuffer_hwyx)
-
-        self.redraw_ui()
-
-    def resize(self):
-        """Handles a change in terminal size"""
-        h, w = self.stdscr.getmaxyx()
-
-        self.win_chatline.mvwin(h - 1, 0)
-        self.win_chatline.resize(1, w)
-
-        self.linebuffer = []
-        for msg in self.chatbuffer:
-            self._linebuffer_add(msg)
 
         self.redraw_ui()
 
@@ -61,28 +48,29 @@ class ChatUI:
         if j < 0:
             j = 0
         for i in range(min(h, len(self.linebuffer))):
-            self.win_chatbuffer.addstr(i, 0, self.linebuffer[j])
+            self.win_chatbuffer.addstr(i, 0, self.linebuffer[j], curses.color_pair(self.linebuffer_color[j]))
             j += 1
         self.win_chatbuffer.refresh()
 
-    def chatbuffer_add(self, msg):
+    def chatbuffer_add(self, msg, color):
         """
         Add a message to the chat buffer, automatically slicing it to
         fit the width of the buffer
         """
-        self.chatbuffer.append(msg)
-        self._linebuffer_add(msg)
+        self._linebuffer_add(msg, color)
         self.redraw_chatbuffer()
         self.redraw_chatline()
         self.win_chatline.cursyncup()
 
-    def _linebuffer_add(self, msg):
+    def _linebuffer_add(self, msg, color):
         h, w = self.stdscr.getmaxyx()
         while len(msg) >= w:
             self.linebuffer.append(msg[:w])
+            self.linebuffer_color.append(color)
             msg = msg[w:]
         if msg:
             self.linebuffer.append(msg)
+            self.linebuffer_color.append(color)
 
     def prompt(self, msg):
         """Prompts the user for input and returns it"""
