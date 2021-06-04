@@ -1,10 +1,11 @@
 import socket
 import threading
+from typing import Optional, Union, Dict
 
 LOCALHOST = "127.0.0.1"
-PORT = 8290
+PORT = 8300
 
-Users = {"admin": {"room": "", "status": "", "socket": None}}
+Users: Dict[str, Dict[str, Union[str, Optional[socket.socket]]]] = {"admin": {"room": "", "status": "", "socket": None}}
 Rooms = {"lobby": {"users": [], "description": "Lobby", "moderators": [], "password": "", "banned": [],
                    "permanent": True}}
 
@@ -55,13 +56,58 @@ class ClientThread(threading.Thread):
                     print(f"New user created {username}")
                     self.csocket.send(bytes("NEW_USER SUCCESSFUL", 'UTF-8'))
 
+            # APPLICATION COMMANDS
+            # /quit
             elif msg_split[0] == "QUIT":
                 print(f"{username} has left the app")
                 self.csocket.send(bytes("QUIT", 'UTF-8'))
+                if username in Rooms[current_room]["moderators"]:
+                    Rooms[current_room]["moderators"].remove(username)
                 Rooms[Users[username]["room"]]["users"].remove(username)
                 Users.pop(username, None)
                 break
 
+            # USER AND MESSAGE COMMANDS
+            # /users
+            elif msg_split[0] == "USERS":
+                out_ = "USERS " + current_room + " " + str(len(Rooms[current_room]["users"]))
+                for user in Rooms[current_room]["users"]:
+                    out_ = out_ + " " + user + " " + Users[user]["status"]
+                print(f"Show users in {current_room}", out_)
+                self.csocket.send(bytes(out_, 'UTF-8'))
+
+            # /status
+            elif msg_split[0] == "STATUS":
+                if msg_split[1] == "DEFAULT":
+                    Users[username]["status"] = "available"
+                    self.csocket.send(bytes("STATUS SUCCESSFUL " + "available", 'UTF-8'))
+                elif msg_split[1] == "NEW_STATUS":
+                    Users[username]["status"] = msg_split[2]
+                    self.csocket.send(bytes("STATUS SUCCESSFUL " + msg_split[2], 'UTF-8'))
+
+            # /r
+            elif msg_split[0] == "PRIVATE":
+                msg_ = str_concatenate(msg_split, 2, len(msg_split))
+                if msg_split[1] == username:
+                    continue
+                elif msg_split[1] in Users:
+                    Users[msg_split[1]]["socket"].send(
+                        bytes("PRIVATE  " + "RECEIVER " + username + " " + msg_, 'UTF-8'))
+                    self.csocket.send(bytes("PRIVATE " + "SENDER " + msg_split[1] + " " + msg_, 'UTF-8'))
+                else:
+                    print(f"{msg_split[1]} does not exist")
+                    self.csocket.send(bytes("PRIVATE " + "UNSUCCESSFUL " + msg_split[1] + " " + msg_, 'UTF-8'))
+
+            # /super
+            elif msg_split[0] == "SUPER":
+                for user in Users:
+                    if Users[user]["socket"] is None:
+                        continue
+                    msg_ = str_concatenate(msg_split, 1, len(msg_split))
+                    Users[user]["socket"].send(bytes("SUPER " + username + " " + msg_, 'UTF-8'))
+
+            # ROOM COMMANDS
+            # /room
             elif msg_split[0] == "ROOM":
                 if msg_split[1] in Rooms:
                     if (msg_split[2] == "PASSWORD" and msg_split[3] == Rooms[msg_split[1]]["password"]) \
@@ -69,6 +115,8 @@ class ClientThread(threading.Thread):
                         if username in Rooms[msg_split[1]]["banned"]:
                             self.csocket.send(bytes("ROOM UNSUCCESSFUL " + msg_split[1] + "BANNED", 'UTF-8'))
                         else:
+                            if username in Rooms[current_room]["moderators"]:
+                                Rooms[current_room]["moderators"].remove(username)
                             Rooms[current_room]["users"].remove(username)
                             for user in Rooms[current_room]["users"]:
                                 Users[user]["socket"].send(bytes("ROOM LEFT " + username, 'UTF-8'))
@@ -95,6 +143,8 @@ class ClientThread(threading.Thread):
                         self.csocket.send(bytes("ROOM UNSUCCESSFUL " + msg_split[1] + " INCORRECT_PASSWORD", 'UTF-8'))
 
                 else:
+                    if username in Rooms[current_room]["moderators"]:
+                        Rooms[current_room]["moderators"].remove(username)
                     Rooms[current_room]["users"].remove(username)
                     if len(Rooms[current_room]["users"]) == 0 and not Rooms[current_room]["permanent"]:
                         Rooms.pop(current_room, None)
@@ -111,6 +161,7 @@ class ClientThread(threading.Thread):
                     print(f"User successfully joined {msg_split[1]} as a moderator")
                     self.csocket.send(bytes("ROOM SUCCESSFUL " + msg_split[1] + " MODERATOR", 'UTF-8'))
 
+            # /list
             elif msg_split[0] == "LIST":
                 out_ = "LIST " + str(len(Rooms))
                 for room in Rooms:
@@ -121,6 +172,8 @@ class ClientThread(threading.Thread):
                 print("List room", out_)
                 self.csocket.send(bytes(out_, 'UTF-8'))
 
+            # MODERATOR COMMANDS
+            # /password
             elif msg_split[0] == "PASSWORD":
                 if username in Rooms[current_room]["moderators"]:
                     if msg_split[1] == "NEW_PASSWORD":
@@ -138,25 +191,22 @@ class ClientThread(threading.Thread):
                 else:
                     self.csocket.send(bytes("PASSWORD UNSUCCESSFUL NOT_MODERATOR", 'UTF-8'))
 
-            elif msg_split[0] == "SUPER":
-                for user in Users:
-                    if Users[user]["socket"] is None:
-                        continue
-                    msg_ = str_concatenate(msg_split, 1, len(msg_split))
-                    Users[user]["socket"].send(bytes("SUPER " + username + " " + msg_, 'UTF-8'))
+            # /description
+            elif msg_split[0] == "DESCRIPTION":
+                if username in Rooms[current_room]["moderators"]:
+                    if msg_split[1] == "DEFAULT":
+                        Rooms[current_room]["description"] = ""
+                    elif msg_split[1] == "NEW_DESCRIPTION":
+                        msg_ = str_concatenate(msg_split, 2, len(msg_split))
+                        Rooms[current_room]["description"] = msg_
+                        if Rooms[current_room]["description"] == "":
+                            msg_ = "DESCRIPTION SUCCESSFUL ADDED " + username + " " + msg_
+                        else:
+                            msg_ = "DESCRIPTION SUCCESSFUL CHANGED " + username + " " + msg_
+                        for user in Rooms[current_room]["users"]:
+                            Users[user]["socket"].send(bytes(msg_, 'UTF-8'))
 
-            elif msg_split[0] == "PRIVATE":
-                msg_ = str_concatenate(msg_split, 2, len(msg_split))
-                if msg_split[1] == username:
-                    continue
-                elif msg_split[1] in Users:
-                    Users[msg_split[1]]["socket"].send(
-                        bytes("PRIVATE  " + "RECEIVER " + username + " " + msg_, 'UTF-8'))
-                    self.csocket.send(bytes("PRIVATE " + "SENDER " + msg_split[1] + " " + msg_, 'UTF-8'))
-                else:
-                    print(f"{msg_split[1]} does not exist")
-                    self.csocket.send(bytes("PRIVATE " + "UNSUCCESSFUL " + msg_split[1] + " " + msg_, 'UTF-8'))
-
+            # /ban
             elif msg_split[0] == "BAN":
                 msg_ = str_concatenate(msg_split, 2, len(msg_split))
                 if msg_split[1] in Rooms[current_room]["users"]:
@@ -179,36 +229,21 @@ class ClientThread(threading.Thread):
                 else:
                     self.csocket.send(bytes("BAN UNSUCCESSFUL NOT_EXISTS", 'UTF-8'))
 
-            elif msg_split[0] == "USERS":
-                out_ = "USERS " + current_room + " " + str(len(Rooms[current_room]["users"]))
-                for user in Rooms[current_room]["users"]:
-                    out_ = out_ + " " + user + " " + Users[user]["status"]
-                print(f"Show users in {current_room}", out_)
-                self.csocket.send(bytes(out_, 'UTF-8'))
+            # /moderator
+            elif msg_split[0] == "MODERATOR":
+                if username not in Rooms[current_room]["moderators"]:
+                    self.csocket.send(bytes("MODERATOR UNSUCCESSFUL NOT_MODERATOR", 'UTF-8'))
+                elif msg_split[1] not in Rooms[current_room]["users"]:
+                    self.csocket.send(bytes("MODERATOR UNSUCCESSFUL NOT_EXIST", 'UTF-8'))
+                elif msg_split[1] in Rooms[current_room]["moderators"]:
+                    self.csocket.send(bytes("MODERATOR UNSUCCESSFUL ALREADY_MODERATOR", 'UTF-8'))
+                else:
+                    for user in Rooms[current_room]["users"]:
+                        Users[user]["socket"].send(bytes("MODERATOR SUCCESSFUL OTHERS " + username + " " + msg_split[1]
+                                                         , 'UTF-8'))
+                        Users[user]["socket"].send(bytes("MODERATOR SUCCESSFUL RECEIVER " + username, 'UTF-8'))
 
-            elif msg_split[0] == "STATUS":
-                if msg_split[1] == "DEFAULT":
-                    Users[username]["status"] = "available"
-                    self.csocket.send(bytes("STATUS SUCCESSFUL " + "available", 'UTF-8'))
-                elif msg_split[1] == "NEW_STATUS":
-                    Users[username]["status"] = msg_split[1]
-                    self.csocket.send(bytes("STATUS SUCCESSFUL " + msg_split[1], 'UTF-8'))
-
-            elif msg_split[0] == "DESCRIPTION":
-                if username in Rooms[current_room]["moderators"]:
-                    if msg_split[1] == "DEFAULT":
-                        Rooms[current_room]["description"] = ""
-                    elif msg_split[1] == "NEW_DESCRIPTION":
-                        msg_ = str_concatenate(msg_split, 2, len(msg_split))
-                        Rooms[current_room]["description"] = msg_
-                        if Rooms[current_room]["description"] == "":
-                            msg_ = "DESCRIPTION SUCCESSFUL ADDED " + username + " " + msg_
-                        else:
-                            msg_ = "DESCRIPTION SUCCESSFUL CHANGED " + username + " " + msg_
-                        for user in Rooms[current_room]["users"]:
-                            Users[user]["socket"].send(bytes(msg_, 'UTF-8'))
-
-
+            # Message
             elif msg_split[0] == "MSG":
                 for user in Rooms[current_room]["users"]:
                     msg_ = str_concatenate(msg_split, 1, len(msg_split))
