@@ -5,8 +5,9 @@ from ui import ChatUI
 from curses import wrapper
 
 SERVER = "127.0.0.1"
-PORT = 8300
+PORT = 8301
 
+# Curses colors
 WHITE_COLOR = 253
 RED_COLOR = 124
 GREEN_COLOR = 35
@@ -19,15 +20,15 @@ DARK_PURPLE_COLOR = 219
 DARK_BLUE_COLOR = 27
 DARK_GREEN_COLOR = 22
 
-
-def str_concatenate(list_, a, b):
-    str_ = ""
-    for i in range(a, b):
-        str_ = str_ + list_[i] + " "
-    return str_[:len(str_) - 1]
-
+separator = " "
 
 def print_commands(ui: ChatUI):
+    """
+    Prints all available commands
+
+
+    @param ui: ChatUI
+    """
     ui.chatbuffer_add(" ", PURPLE_COLOR)
     ui.chatbuffer_add("APPLICATION COMMANDS", PURPLE_COLOR)
     ui.chatbuffer_add("\t/quit : Quit application", PURPLE_COLOR)
@@ -54,11 +55,12 @@ def main(stdscr):
     ui = ChatUI(stdscr)
 
     ui.chatbuffer_add("Welcome to the chat app!", GREEN_COLOR)
+    # Ask the user to enter a username until it is alphanumeric and is not taken.
     while True:
-        ui.chatbuffer_add("Please enter an username:", GREEN_COLOR)
+        ui.chatbuffer_add("Please enter a username:", GREEN_COLOR)
         username = ui.wait_input()
         if not username.isalnum():
-            ui.chatbuffer_add("Please enter an username that only contains alphanumeric characters!", RED_COLOR)
+            ui.chatbuffer_add("Please enter a username that only contains alphanumeric characters!", RED_COLOR)
         else:
             client.sendall(bytes("NEW_USER " + username, 'UTF-8'))
             in_data = client.recv(1024)
@@ -73,6 +75,7 @@ def main(stdscr):
                     if in_[2] == "USERNAME_TAKEN":
                         ui.chatbuffer_add("Username is taken!", RED_COLOR)
 
+    # Create and start threads for taking input and printing output.
     input_thread = threading.Thread(target=take_input, args=(client, ui,))
     output_thread = threading.Thread(target=print_output, args=(client, ui,))
 
@@ -84,33 +87,44 @@ def main(stdscr):
 
     client.close()
 
+
 def print_output(client, ui):
+    """
+    Prints output according to the command received from the server.
+
+
+    @param client: Socket address
+    @param ui: ChatUI
+    """
     while True:
+        # Receive and decode message from the server
         in_data = client.recv(1024)
         msg = in_data.decode()
         msg_split = msg.split()
 
         # APPLICATION COMMANDS
-        # /quit
+        # /quit : Quit application
         if msg_split[0] == "QUIT":
+            ui.chatbuffer_add("Bye!", GREEN_COLOR)
+            time.sleep(3)
             break
 
         # USER AND MESSAGE COMMANDS
-        # /users
+        # /users : List all users in the room
         elif msg_split[0] == "USERS":
             ui.chatbuffer_add(f"Current Room: {msg_split[1]}\tUsers: {msg_split[2]}", DARK_GREEN_COLOR)
             for i in range(int(msg_split[2])):
                 index = 2 * i + 3
                 ui.chatbuffer_add(f"User: {msg_split[index]}\t\tStatus: {msg_split[index + 1]}", DARK_GREEN_COLOR)
 
-        # /status
+        # /status <new status> : Add or change status
         elif msg_split[0] == "STATUS":
             if msg_split[1] == "SUCCESSFUL":
                 ui.chatbuffer_add(f"You have changed your status to {msg_split[2]}!", DARK_GREEN_COLOR)
 
-        # /r
+        # /r <username> <message> : Send a private message to the given username
         elif msg_split[0] == "PRIVATE":
-            msg_ = str_concatenate(msg_split, 3, len(msg_split))
+            msg_ = separator.join(msg_split[3:])
             if msg_split[1] == "RECEIVER":
                 ui.chatbuffer_add("> [" + msg_split[2] + "]: " + msg_, ORANGE_COLOR)
             elif msg_split[1] == "SENDER":
@@ -119,19 +133,19 @@ def print_output(client, ui):
                 ui.chatbuffer_add("! [" + msg_split[2] + "]: " + msg_, RED_COLOR)
                 ui.chatbuffer_add("This user does not exist!", RED_COLOR)
 
-        # /super
+        # /super <message> : Send a message to all available users
         elif msg_split[0] == "SUPER":
-            msg_ = str_concatenate(msg_split, 2, len(msg_split))
+            msg_ = separator.join(msg_split[2:])
             ui.chatbuffer_add("* [" + msg_split[1] + "]: " + msg_, YELLOW_COLOR)
 
         # ROOM COMMANDS
-        # /room
+        # /room <room name> <password> : Create or join a room
         elif msg_split[0] == "ROOM":
             if msg_split[1] == "SUCCESSFUL":
                 if msg_split[3] == "USER":
                     ui.chatbuffer_add(f"Welcome to the {msg_split[2]} room!", DARK_PURPLE_COLOR)
                     if msg_split[4] == "DESCRIPTION":
-                        msg_ = str_concatenate(msg_split, 5, len(msg_split))
+                        msg_ = separator.join(msg_split[5:])
                         ui.chatbuffer_add(f"Description: {msg_}", DARK_PURPLE_COLOR)
                 elif msg_split[3] == "MODERATOR":
                     ui.chatbuffer_add(f"Welcome to the {msg_split[2]} room!", DARK_PURPLE_COLOR)
@@ -143,8 +157,8 @@ def print_output(client, ui):
                     ui.chatbuffer_add(f"Incorrect password for {msg_split[2]}!", RED_COLOR)
                 elif msg_split[3] == "PASSWORD_REQUIRED":
                     ui.chatbuffer_add(f"Password is required to join {msg_split[2]} room!", RED_COLOR)
-                    ui.chatbuffer_add(f"Please use /room <room name> <password> command to join {msg_split[2]}"
-                                      , RED_COLOR)
+                    ui.chatbuffer_add(f"Please use /room <room name> <password> command to join {msg_split[2]}",
+                                      RED_COLOR)
                 elif msg_split[3] == "BANNED":
                     ui.chatbuffer_add(f"You have been banned from {msg_split[2]} room!", PINK_COLOR)
             elif msg_split[1] == "JOINED":
@@ -154,7 +168,7 @@ def print_output(client, ui):
             elif msg_split[1] == "LOGGED_IN":
                 ui.chatbuffer_add(f"{msg_split[2]} has logged in.", DARK_PURPLE_COLOR)
 
-        # /list
+        # /list : List all available rooms
         elif msg_split[0] == "LIST":
             for i in range(int(msg_split[1])):
                 index = 3 * i + 2
@@ -165,7 +179,7 @@ def print_output(client, ui):
                                   DARK_BLUE_COLOR)
 
         # MODERATOR COMMANDS
-        # /password
+        # /password <password> : Add or change password
         elif msg_split[0] == "PASSWORD":
             if msg_split[1] == "SUCCESSFUL":
                 if msg_split[2] == "ADDED":
@@ -181,10 +195,10 @@ def print_output(client, ui):
                     ui.chatbuffer_add("There is no password in this room!", RED_COLOR)
                     ui.chatbuffer_add("Please enter a alphanumeric password by using /password <new password> command",
                                       RED_COLOR)
-        # /description
+        # /description <new description> : Add or change description
         elif msg_split[0] == "DESCRIPTION":
             if msg_split[1] == "SUCCESSFUL":
-                msg_ = str_concatenate(msg_split, 4, len(msg_split))
+                msg_ = separator.join(msg_split[4:])
                 if msg_split[2] == "ADDED":
                     ui.chatbuffer_add(f"* {msg_split[3]} has added a description to room!", DARK_PURPLE_COLOR)
                     ui.chatbuffer_add(f"Description: {msg_}", DARK_PURPLE_COLOR)
@@ -198,9 +212,9 @@ def print_output(client, ui):
                     ui.chatbuffer_add("You have to be a moderator to change description of the room!",
                                       RED_COLOR)
 
-        # /ban
+        # /ban <user> <reason> : Ban user
         elif msg_split[0] == "BAN":
-            msg_ = str_concatenate(msg_split, 5, len(msg_split))
+            msg_ = separator.join(msg_split[5:])
             if msg_split[1] == "SUCCESSFUL":
                 if msg_split[2] == "RECEIVER":
                     ui.chatbuffer_add(
@@ -216,7 +230,7 @@ def print_output(client, ui):
                 elif msg_split[2] == "RECEIVER_MODERATOR":
                     ui.chatbuffer_add("You can't ban a moderator!", RED_COLOR)
 
-        # /moderator
+        # /moderator <username> : Make user a moderator
         elif msg_split[0] == "MODERATOR":
             if msg_split[1] == "SUCCESSFUL":
                 if msg_split[2] == "RECEIVER":
@@ -233,11 +247,18 @@ def print_output(client, ui):
 
         # MESSAGE
         elif msg_split[0] == "MSG":
-            msg_ = str_concatenate(msg_split, 2, len(msg_split))
+            msg_ = separator.join(msg_split[2:])
             ui.chatbuffer_add("[" + msg_split[1] + "]: " + msg_, WHITE_COLOR)
 
 
 def take_input(client, ui):
+    """
+    Take input from the ui and send command to the server.
+
+
+    @param client:
+    @param ui:
+    """
     while True:
         out_data = ui.wait_input()
         if out_data != "":
@@ -246,48 +267,49 @@ def take_input(client, ui):
                 command = split_out[0][1:].upper()
 
                 # APPLICATION COMMANDS
-                # /quit
+                # /quit : Quit application
                 if command == "QUIT":
                     client.sendall(bytes("QUIT", 'UTF-8'))
                     break
 
-                # /help
+                # /help : List all commands
                 elif command == "HELP":
                     print_commands(ui)
 
                 # USER AND MESSAGE COMMANDS
-                # /users
+                # /users : List all users in the room
                 elif command == "USERS":
                     client.sendall(bytes("USERS", 'UTF-8'))
 
+                # /status <new status> : Add or change status
                 elif command == "STATUS":
                     if len(split_out) == 1:
                         client.sendall(bytes("STATUS DEFAULT", 'UTF-8'))
                     elif len(split_out) == 2:
                         client.sendall(bytes("STATUS NEW_STATUS " + split_out[1], 'UTF-8'))
                     else:
-                        ui.chatbuffer_add("Please enter a alphanumeric status by using /status <new status> command"
-                                          , RED_COLOR)
+                        ui.chatbuffer_add("Please enter a alphanumeric status by using /status <new status> command",
+                                          RED_COLOR)
 
-                # /r
+                # /r <username> <message> : Send a private message to the given username
                 elif command == "R":
                     if len(split_out) < 3:
                         ui.chatbuffer_add("Please enter an username and a message by using /r <username> <message> "
                                           "command", RED_COLOR)
                     else:
-                        msg_ = str_concatenate(split_out, 2, len(split_out))
+                        msg_ = separator.join(split_out[2:])
                         client.sendall(bytes("PRIVATE " + split_out[1] + " " + msg_, 'UTF-8'))
 
-                # /super
+                # /super <message> : Send a message to all available users
                 elif command == "SUPER":
                     if len(split_out) == 1:
                         ui.chatbuffer_add("Please enter a message by using /super <message> command", RED_COLOR)
                     else:
-                        msg_ = str_concatenate(split_out, 1, len(split_out))
+                        msg_ = separator.join(split_out[1:])
                         client.sendall(bytes("SUPER " + msg_, 'UTF-8'))
 
                 # ROOM COMMANDS
-                # /room
+                # /room <room name> <password> : Create or join a room
                 elif command == "ROOM":
                     if len(split_out) == 3:
                         client.sendall(bytes("ROOM " + split_out[1] + " PASSWORD " + split_out[2], 'UTF-8'))
@@ -296,12 +318,12 @@ def take_input(client, ui):
                     else:
                         ui.chatbuffer_add("Please use /room <room name> <password> command to join a room", RED_COLOR)
 
-                # /list
+                # /list : List all available rooms
                 elif command == "LIST":
                     client.sendall(bytes("LIST", 'UTF-8'))
 
                 # MODERATOR COMMANDS
-                # /password
+                # /password <password> : Add or change password
                 elif command == "PASSWORD":
                     if len(split_out) >= 3:
                         ui.chatbuffer_add("Please enter a alphanumeric password by using /password <new password> "
@@ -311,25 +333,24 @@ def take_input(client, ui):
                     else:
                         client.sendall(bytes("PASSWORD NEW_PASSWORD " + split_out[1], 'UTF-8'))
 
-                # /description
+                # /description <new description> : Add or change description
                 elif command == "DESCRIPTION":
                     if len(split_out) == 1:
                         client.sendall(bytes("DESCRIPTION DEFAULT", 'UTF-8'))
                     else:
-                        msg_ = str_concatenate(split_out, 1, len(split_out))
+                        msg_ = separator.join(split_out[1:])
                         client.sendall(bytes("DESCRIPTION NEW_DESCRIPTION " + msg_, 'UTF-8'))
 
-                # /ban
+                # /ban <user> <reason> : Ban user
                 elif command == "BAN":
-
-                    msg_ = str_concatenate(split_out, 2, len(split_out))
+                    msg_ = separator.join(split_out[2:])
                     client.sendall(bytes("BAN " + split_out[1] + " " + msg_, 'UTF-8'))
 
-                # /moderator
+                # /moderator <username> : Make user a moderator
                 elif command == "MODERATOR":
                     if len(split_out) == 1:
-                        ui.chatbuffer_add("Please enter a username by using /moderator <username> command!"
-                                          , RED_COLOR)
+                        ui.chatbuffer_add("Please enter a username by using /moderator <username> command!",
+                                          RED_COLOR)
                     else:
                         client.sendall(bytes("MODERATOR " + split_out[1], 'UTF-8'))
 

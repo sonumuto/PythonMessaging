@@ -5,18 +5,17 @@ class ChatUI:
     def __init__(self, stdscr):
         curses.use_default_colors()
         for i in range(0, curses.COLORS):
-            curses.init_pair(i, i, -1);
+            curses.init_pair(i, i, -1)
         self.stdscr = stdscr
-        self.inputbuffer = ""
-        self.linebuffer = []
-        self.linebuffer_color = []
+        self.input_buffer = ""
+        self.line_buffer = []
+        self.line_buffer_color = []
 
         # Curses, why must you confuse me with your height, width, y, x
-        chatbuffer_hwyx = (curses.LINES - 2, 0,
-                           0, 0)
+        chat_buffer_hwyx = (curses.LINES - 2, 0, 0, 0)
         chatline_yx = (curses.LINES - 1, 0)
         self.win_chatline = stdscr.derwin(*chatline_yx)
-        self.win_chatbuffer = stdscr.derwin(*chatbuffer_hwyx)
+        self.win_chat_buffer = stdscr.derwin(*chat_buffer_hwyx)
 
         self.redraw_ui()
 
@@ -34,23 +33,23 @@ class ChatUI:
         """Redraw the user input textbox"""
         h, w = self.win_chatline.getmaxyx()
         self.win_chatline.clear()
-        start = len(self.inputbuffer) - w + 1
+        start = len(self.input_buffer) - w + 1
         if start < 0:
             start = 0
-        self.win_chatline.addstr(0, 0, self.inputbuffer[start:])
+        self.win_chatline.addstr(0, 0, self.input_buffer[start:])
         self.win_chatline.refresh()
 
     def redraw_chatbuffer(self):
         """Redraw the chat message buffer"""
-        self.win_chatbuffer.clear()
-        h, w = self.win_chatbuffer.getmaxyx()
-        j = len(self.linebuffer) - h
+        self.win_chat_buffer.clear()
+        h, w = self.win_chat_buffer.getmaxyx()
+        j = len(self.line_buffer) - h
         if j < 0:
             j = 0
-        for i in range(min(h, len(self.linebuffer))):
-            self.win_chatbuffer.addstr(i, 0, self.linebuffer[j], curses.color_pair(self.linebuffer_color[j]))
+        for i in range(min(h, len(self.line_buffer))):
+            self.win_chat_buffer.addstr(i, 0, self.line_buffer[j], curses.color_pair(self.line_buffer_color[j]))
             j += 1
-        self.win_chatbuffer.refresh()
+        self.win_chat_buffer.refresh()
 
     def chatbuffer_add(self, msg, color):
         """
@@ -65,16 +64,16 @@ class ChatUI:
     def _linebuffer_add(self, msg, color):
         h, w = self.stdscr.getmaxyx()
         while len(msg) >= w:
-            self.linebuffer.append(msg[:w])
-            self.linebuffer_color.append(color)
+            self.line_buffer.append(msg[:w])
+            self.line_buffer_color.append(color)
             msg = msg[w:]
         if msg:
-            self.linebuffer.append(msg)
-            self.linebuffer_color.append(color)
+            self.line_buffer.append(msg)
+            self.line_buffer_color.append(color)
 
     def prompt(self, msg):
         """Prompts the user for input and returns it"""
-        self.inputbuffer = msg
+        self.input_buffer = msg
         self.redraw_chatline()
         res = self.wait_input()
         res = res[len(msg):]
@@ -85,23 +84,21 @@ class ChatUI:
         Wait for the user to input a message and hit enter.
         Returns the message
         """
-        self.inputbuffer = prompt
+        self.input_buffer = prompt
         self.redraw_chatline()
         self.win_chatline.cursyncup()
         last = -1
         while last != ord('\n'):
             last = self.stdscr.getch()
             if last == ord('\n'):
-                tmp = self.inputbuffer
-                self.inputbuffer = ""
+                tmp = self.input_buffer
+                self.input_buffer = ""
                 self.redraw_chatline()
                 self.win_chatline.cursyncup()
                 return tmp[len(prompt):]
             elif last == curses.KEY_BACKSPACE or last == 127:
-                if len(self.inputbuffer) > len(prompt):
-                    self.inputbuffer = self.inputbuffer[:-1]
-            elif last == curses.KEY_RESIZE:
-                self.resize()
+                if len(self.input_buffer) > len(prompt):
+                    self.input_buffer = self.input_buffer[:-1]
             elif 32 <= last <= 126:
-                self.inputbuffer += chr(last)
+                self.input_buffer += chr(last)
             self.redraw_chatline()
