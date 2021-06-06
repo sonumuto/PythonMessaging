@@ -106,7 +106,7 @@ def print_output(client, ui):
         # /quit : Quit application
         if msg_split[0] == "QUIT":
             ui.chatbuffer_add("Bye!", GREEN_COLOR)
-            time.sleep(3)
+            time.sleep(1)
             break
 
         # USER AND MESSAGE COMMANDS

@@ -23,7 +23,7 @@ class ChatUI:
         """Redraws the entire UI"""
         h, w = self.stdscr.getmaxyx()
         self.stdscr.clear()
-        self.stdscr.hline(h - 2, 0, "=", w)
+        self.stdscr.hline(h - 2, 0, "~", w)
         self.stdscr.refresh()
 
         self.redraw_chatbuffer()
