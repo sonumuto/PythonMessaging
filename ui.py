@@ -8,81 +8,89 @@ class ChatUI:
             curses.init_pair(i, i, -1)
         self.stdscr = stdscr
         self.input_buffer = ""
-        self.line_buffer = []
-        self.line_buffer_color = []
+        self.buffer = []
+        self.buffer_color = []
 
-        # Curses, why must you confuse me with your height, width, y, x
-        chat_buffer_hwyx = (curses.LINES - 2, 0, 0, 0)
+        chat_hwyx = (curses.LINES - 2, 0, 0, 0)
         chatline_yx = (curses.LINES - 1, 0)
         self.win_chatline = stdscr.derwin(*chatline_yx)
-        self.win_chat_buffer = stdscr.derwin(*chat_buffer_hwyx)
+        self.chat_win = stdscr.derwin(*chat_hwyx)
 
-        self.redraw_ui()
-
-    def redraw_ui(self):
-        """Redraws the entire UI"""
-        h, w = self.stdscr.getmaxyx()
+        self.y, self.x = self.stdscr.getmaxyx()
         self.stdscr.clear()
-        self.stdscr.hline(h - 2, 0, "~", w)
+        self.stdscr.hline(self.y - 2, 0, "~", self.x)
         self.stdscr.refresh()
 
-        self.redraw_chatbuffer()
+        self.redraw_chat()
         self.redraw_chatline()
 
     def redraw_chatline(self):
-        """Redraw the user input textbox"""
-        h, w = self.win_chatline.getmaxyx()
+        """
+        Redraw the user input textbox
+        """
+
         self.win_chatline.clear()
-        start = len(self.input_buffer) - w + 1
+        start = len(self.input_buffer) - self.x + 1
         if start < 0:
             start = 0
         self.win_chatline.addstr(0, 0, self.input_buffer[start:])
         self.win_chatline.refresh()
 
-    def redraw_chatbuffer(self):
-        """Redraw the chat message buffer"""
-        self.win_chat_buffer.clear()
-        h, w = self.win_chat_buffer.getmaxyx()
-        j = len(self.line_buffer) - h
+    def redraw_chat(self):
+        """
+        Redraw the chat message buffer
+        """
+        self.chat_win.clear()
+        y, x = self.chat_win.getmaxyx()
+        j = len(self.buffer) - y
         if j < 0:
             j = 0
-        for i in range(min(h, len(self.line_buffer))):
-            self.win_chat_buffer.addstr(i, 0, self.line_buffer[j], curses.color_pair(self.line_buffer_color[j]))
+        for i in range(min(y, len(self.buffer))):
+            self.chat_win.addstr(i, 0, self.buffer[j], curses.color_pair(self.buffer_color[j]))
             j += 1
-        self.win_chat_buffer.refresh()
+        self.chat_win.refresh()
 
-    def chatbuffer_add(self, msg, color):
+    def chat_window_add(self, msg, color):
         """
         Add a message to the chat buffer, automatically slicing it to
         fit the width of the buffer
+
+
+        @param msg: Message to print
+        @param color: Color of the message
         """
-        self._linebuffer_add(msg, color)
-        self.redraw_chatbuffer()
+        self.add_buffer(msg, color)
+        self.redraw_chat()
         self.redraw_chatline()
         self.win_chatline.cursyncup()
 
-    def _linebuffer_add(self, msg, color):
-        h, w = self.stdscr.getmaxyx()
-        while len(msg) >= w:
-            self.line_buffer.append(msg[:w])
-            self.line_buffer_color.append(color)
-            msg = msg[w:]
+    def add_buffer(self, msg, color):
+        y, x = self.stdscr.getmaxyx()
+        while len(msg) >= x:
+            self.buffer.append(msg[:x])
+            self.buffer_color.append(color)
+            msg = msg[x:]
         if msg:
-            self.line_buffer.append(msg)
-            self.line_buffer_color.append(color)
+            self.buffer.append(msg)
+            self.buffer_color.append(color)
 
     def prompt(self, msg):
-        """Prompts the user for input and returns it"""
+        """
+        Prompts the user for input and returns it
+        """
         self.input_buffer = msg
         self.redraw_chatline()
-        res = self.wait_input()
+        res = self.user_input()
         res = res[len(msg):]
         return res
 
-    def wait_input(self, prompt=""):
+    def user_input(self, prompt=""):
         """
         Wait for the user to input a message and hit enter.
         Returns the message
+
+
+        @param prompt: Input to return
         """
         self.input_buffer = prompt
         self.redraw_chatline()
