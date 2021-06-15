@@ -30,11 +30,13 @@ class ClientThread(threading.Thread):
             data = self.client_socket.recv(2048)
             msg = data.decode()
 
-            print(f"From client {username}: ", msg)
-            msg_split = msg.split()
-
             if username != "":
                 current_room = Users[username]["room"]
+                print(f"From client {username}: ", msg)
+            else:
+                print("From new client: ", msg)
+
+            msg_split = msg.split()
 
             if msg_split[0] == "NEW_USER":
                 # Username is taken
@@ -44,6 +46,7 @@ class ClientThread(threading.Thread):
                 else:
                     username = msg_split[1]
                     for user in Rooms["lobby"]["users"]:
+                        print(f"{msg_split[1]} logged in ")
                         Users[user]["socket"].send(bytes("ROOM LOGGED_IN " + username, 'UTF-8'))
 
                     # Create user and initialize variables
@@ -74,29 +77,36 @@ class ClientThread(threading.Thread):
                 out_ = "USERS " + current_room + " " + str(len(Rooms[current_room]["users"]))
                 for user in Rooms[current_room]["users"]:
                     out_ = out_ + " " + user + " " + Users[user]["status"]
-                print(f"Show users in {current_room}", out_)
+                print(f"{username}: User requested the list of users in {current_room}")
                 self.client_socket.send(bytes(out_, 'UTF-8'))
 
             # /status <new status> : Add or change status
             elif msg_split[0] == "STATUS":
                 if msg_split[1] == "DEFAULT":
+                    print(f"{username}: Set status as available")
                     Users[username]["status"] = "available"
                     self.client_socket.send(bytes("STATUS SUCCESSFUL " + "available", 'UTF-8'))
                 elif msg_split[1] == "NEW_STATUS":
+                    print(f"{username}: Set status to {msg_split[2]}")
                     Users[username]["status"] = msg_split[2]
                     self.client_socket.send(bytes("STATUS SUCCESSFUL " + msg_split[2], 'UTF-8'))
 
             # /r <username> <message> : Send a private message to the given username
             elif msg_split[0] == "PRIVATE":
                 msg_ = self.separator.join(msg_split[2:])
+                # If receiver and sender are the same users, continue
                 if msg_split[1] == username:
+                    print(f"{username}: Receiver and sender are the same users")
                     continue
+                # If receiver exists, find receiver and send message
                 elif msg_split[1] in Users:
                     Users[msg_split[1]]["socket"].send(
                         bytes("PRIVATE  " + "RECEIVER " + username + " " + msg_, 'UTF-8'))
                     self.client_socket.send(bytes("PRIVATE " + "SENDER " + msg_split[1] + " " + msg_, 'UTF-8'))
+                    print(f"{username}: Private message successfully sent to {msg_split[1]}: {msg_}")
+                # If user doesn't exist, send unsuccessful message to the sender
                 else:
-                    print(f"{msg_split[1]} does not exist")
+                    print(f"{username}: {msg_split[1]} does not exist")
                     self.client_socket.send(bytes("PRIVATE " + "UNSUCCESSFUL " + msg_split[1] + " " + msg_, 'UTF-8'))
 
             # /super <message> : Send a message to all available users
@@ -105,22 +115,29 @@ class ClientThread(threading.Thread):
                     if Users[user]["socket"] is None:
                         continue
                     msg_ = self.separator.join(msg_split[1:])
+                    print(f"{username} sent super message: ", msg_,)
                     Users[user]["socket"].send(bytes("SUPER " + username + " " + msg_, 'UTF-8'))
 
             # ROOM COMMANDS
             # /room <room name> <password> : Create or join a room
             elif msg_split[0] == "ROOM":
+                # Check if the room exists
                 if msg_split[1] in Rooms:
                     if (msg_split[2] == "PASSWORD" and msg_split[3] == Rooms[msg_split[1]]["password"]) \
                             or Rooms[msg_split[1]]["password"] == "":
+                        # Check if the user is banned
                         if username in Rooms[msg_split[1]]["banned"]:
+                            print(f"{username}: Joining {msg_split[1]} is unsuccessful. User was banned.")
                             self.client_socket.send(bytes("ROOM UNSUCCESSFUL " + msg_split[1] + "BANNED", 'UTF-8'))
                         else:
+                            # Remove user from the old room
                             if username in Rooms[current_room]["moderators"]:
                                 Rooms[current_room]["moderators"].remove(username)
                             Rooms[current_room]["users"].remove(username)
+
                             for user in Rooms[current_room]["users"]:
                                 Users[user]["socket"].send(bytes("ROOM LEFT " + username, 'UTF-8'))
+                            # Remove room if there is no user left in the room and room is not permanent
                             if len(Rooms[current_room]["users"]) == 0 and not Rooms[current_room]["permanent"]:
                                 Rooms.pop(current_room, None)
                             for user in Rooms[msg_split[1]]["users"]:
@@ -140,7 +157,6 @@ class ClientThread(threading.Thread):
                         print(f"No password entered for {msg_split[1]}")
                         self.client_socket.send(bytes("ROOM UNSUCCESSFUL " + msg_split[1] + " PASSWORD_REQUIRED",
                                                       'UTF-8'))
-
                     else:
                         print(f"Incorrect password for {msg_split[1]}")
                         self.client_socket.send(bytes("ROOM UNSUCCESSFUL " + msg_split[1] + " INCORRECT_PASSWORD",
