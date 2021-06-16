@@ -5,7 +5,7 @@ from ui import ChatUI
 from curses import wrapper
 
 SERVER = "127.0.0.1"
-PORT = 8301
+PORT = 8307
 
 # Curses colors
 WHITE_COLOR = 253
@@ -25,8 +25,6 @@ separator = " "
 def print_commands(ui: ChatUI):
     """
     Prints all available commands
-
-
     @param ui: ChatUI
     """
     ui.chat_window_add(" ", PURPLE_COLOR)
@@ -221,7 +219,8 @@ def print_output(client, ui):
                         f"* [{msg_split[3]}]: You have been banned from {msg_split[5]} room! Reason: {msg_}",
                         PINK_COLOR)
                 elif msg_split[2] == "OTHERS":
-                    ui.chat_window_add(f"* [{msg_split[4]}]: {msg_split[3]} has been banned! Reason: {msg_}", PINK_COLOR)
+                    ui.chat_window_add(f"* [{msg_split[4]}]: {msg_split[3]} has been banned! Reason: {msg_}",
+                                       PINK_COLOR)
             elif msg_split[1] == "UNSUCCESSFUL":
                 if msg_split[2] == "SENDER_NOT_MODERATOR":
                     ui.chat_window_add("You have to be a moderator to use this command!", RED_COLOR)
@@ -295,7 +294,7 @@ def take_input(client, ui):
                 elif command == "R":
                     if len(split_out) < 3:
                         ui.chat_window_add("Please enter an username and a message by using /r <username> <message> "
-                                          "command", RED_COLOR)
+                                           "command", RED_COLOR)
                     else:
                         msg_ = separator.join(split_out[2:])
                         client.sendall(bytes("PRIVATE " + split_out[1] + " " + msg_, 'UTF-8'))
@@ -327,7 +326,7 @@ def take_input(client, ui):
                 elif command == "PASSWORD":
                     if len(split_out) >= 3:
                         ui.chat_window_add("Please enter a alphanumeric password by using /password <new password> "
-                                          "command", RED_COLOR)
+                                           "command", RED_COLOR)
                     elif len(split_out) == 1:
                         client.sendall(bytes("PASSWORD REMOVE", 'UTF-8'))
                     else:

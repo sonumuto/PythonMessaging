@@ -3,7 +3,7 @@ import threading
 from typing import Optional, Union, Dict
 
 LOCALHOST = "127.0.0.1"
-PORT = 8301
+PORT = 8307
 
 Users: Dict[str, Dict[str, Union[str, Optional[socket.socket]]]] = {"admin": {"room": "", "status": "", "socket": None}}
 Rooms = {"lobby": {"users": [], "description": "Lobby", "moderators": [], "password": "", "banned": [],
